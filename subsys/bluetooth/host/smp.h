@@ -212,3 +212,5 @@ static inline const char *bt_smp_err_to_str(uint8_t smp_err)
 	return "";
 }
 #endif
+
+void bt_smp_set_enc_key_size(uint8_t key_size);

@@ -295,6 +295,7 @@ static bool sc_oobd_present;
 static bool legacy_oobd_present;
 static bool sc_supported;
 static const uint8_t *sc_public_key;
+static uint8_t dynamic_enc_key_size = 16;
 
 static void bt_smp_pkey_ready(const uint8_t *pkey);
 static struct {
@@ -3417,7 +3418,8 @@ static int smp_send_pairing_req(struct bt_conn *conn)
 	req->oob_flag = (legacy_oobd_present || sc_oobd_present) ?
 				BT_SMP_OOB_PRESENT : BT_SMP_OOB_NOT_PRESENT;
 
-	req->max_key_size = BT_SMP_MAX_ENC_KEY_SIZE;
+	// req->max_key_size = BT_SMP_MAX_ENC_KEY_SIZE;
+	req->max_key_size = dynamic_enc_key_size;
 
 	if (req->auth_req & BT_SMP_AUTH_BONDING) {
 		req->init_key_dist = SEND_KEYS;
@@ -6422,4 +6424,9 @@ int bt_smp_init(void)
 	}
 
 	return smp_self_test();
+}
+
+void bt_smp_set_enc_key_size(uint8_t key_size)
+{
+	dynamic_enc_key_size = key_size;
 }
