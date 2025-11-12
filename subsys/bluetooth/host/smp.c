@@ -296,6 +296,7 @@ static bool legacy_oobd_present;
 static bool sc_supported;
 static const uint8_t *sc_public_key;
 static uint8_t dynamic_enc_key_size = 16;
+static bool sc_downgrade = false;
 
 static void bt_smp_pkey_ready(const uint8_t *pkey);
 static struct {
@@ -3409,6 +3410,12 @@ static int smp_send_pairing_req(struct bt_conn *conn)
 	req = net_buf_add(req_buf, sizeof(*req));
 
 	req->auth_req = get_auth(smp, BT_SMP_AUTH_DEFAULT);
+
+	if (sc_downgrade) {
+		LOG_DBG("Downgrading to legacy security request");
+		req->auth_req &= ~BT_SMP_AUTH_SC;
+	}
+
 	req->io_capability = get_io_capa(smp);
 
 	/* At this point is it unknown if pairing will be legacy or LE SC so
@@ -6429,4 +6436,10 @@ int bt_smp_init(void)
 void bt_smp_set_enc_key_size(uint8_t key_size)
 {
 	dynamic_enc_key_size = key_size;
+}
+
+void bt_smp_secure_connections_downgrade(bool downgrade)
+{
+	LOG_DBG("bt_smp_secure_connections_downgrade called with downgrade %d", downgrade);
+	sc_downgrade = downgrade;
 }
