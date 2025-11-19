@@ -1427,7 +1427,8 @@ int bt_id_reset(uint8_t id, bt_addr_le_t *addr, uint8_t *irk)
 		return -EINVAL;
 	}
 
-	if (id == BT_ID_DEFAULT || id >= bt_dev.id_count) {
+	// removed the check for BT_ID_DEFAULT
+	if (id >= bt_dev.id_count) {
 		return -EINVAL;
 	}
 
@@ -2293,4 +2294,8 @@ int bt_id_init(void)
 	}
 
 	return 0;
+}
+
+void bt_rpa_invalidate(void){
+	le_rpa_invalidate();
 }

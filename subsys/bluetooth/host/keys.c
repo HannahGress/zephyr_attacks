@@ -40,6 +40,12 @@
 LOG_MODULE_REGISTER(bt_keys);
 
 static struct bt_keys key_pool[CONFIG_BT_MAX_PAIRED];
+// Array to snapshot the keypool
+static struct bt_keys key_pool_snapshot[CONFIG_BT_MAX_PAIRED];
+// save the key here
+static struct bt_keys saved_keys[CONFIG_BT_MAX_PAIRED];
+// Boolean to keep track of snapshots
+static bool snapshot_taken = false;
 
 #define BT_KEYS_STORAGE_LEN_COMPAT (BT_KEYS_STORAGE_LEN - sizeof(uint32_t))
 
@@ -541,3 +547,151 @@ struct bt_keys *bt_keys_get_last_keys_updated(void)
 }
 #endif /* CONFIG_BT_KEYS_OVERWRITE_OLDEST */
 #endif /* ZTEST_UNITTEST */
+
+/* Function to take a snapshot of the current key_pool in the local array
+ * we check if there is connection obj with the dest equal to addr and copy its keys (if they exist)
+ */
+
+void bt_keys_snapshot_take(const bt_addr_le_t *addr)
+{
+    bool pool_empty = true;
+
+    for (int i = 0; i < ARRAY_SIZE(key_pool); i++) {
+        if (!bt_addr_le_eq(&key_pool[i].addr, BT_ADDR_LE_ANY)) {
+            pool_empty = false;
+            break;
+        }
+    }
+
+    if (!pool_empty) {
+        LOG_INF("Taking full key pool snapshot");
+        memcpy(key_pool_snapshot, key_pool, sizeof(key_pool));
+        snapshot_taken = true;
+
+    } else if (addr) {
+        LOG_INF("Key pool is empty, searching for connection with address %s", bt_addr_le_str(addr));
+
+        for (int i = 0; i < ARRAY_SIZE(key_pool); i++) {
+            if (bt_addr_le_eq(&key_pool[i].addr, addr)) {
+                LOG_INF("Found keys for address %s, storing snapshot", bt_addr_le_str(addr));
+                memcpy(&key_pool_snapshot[0], &key_pool[i], sizeof(struct bt_keys));
+                snapshot_taken = true;
+                break;
+            }
+        }
+    } else {
+        LOG_WRN("Key pool is empty and no address provided");
+    }
+
+
+    if(!snapshot_taken){
+        LOG_WRN("No snaphsot was taken. Pool is empty and no connection with addr %s was found", bt_addr_le_str(addr));
+	return;
+    }
+
+    uint8_t ltk[16];
+    int i = 0;
+    // for (i = 0; i < ARRAY_SIZE(key_pool); i++) {
+    sys_memcpy_swap(ltk, key_pool[i].ltk.val, key_pool[i].enc_size);
+    LOG_INF("Saved key %d: id=%d, addr=%s, keys=%u, SC LTK=%s", i, key_pool[i].id, bt_addr_le_str(&key_pool[i].addr), key_pool[i].keys, bt_hex(ltk, key_pool[i].enc_size));
+    // }
+
+}
+
+// Function to restore key_pool from the snapshot
+void bt_keys_snapshot_restore(void)
+{
+	if (!snapshot_taken) {
+		LOG_WRN("No snapshot available to restore");
+		return;
+	}
+
+	memcpy(key_pool, key_pool_snapshot, sizeof(key_pool));
+
+        uint8_t ltk[16];
+	int i = 0;
+	// for (i = 0; i < ARRAY_SIZE(key_pool); i++) {
+	    sys_memcpy_swap(ltk, key_pool[i].ltk.val, key_pool[i].enc_size);
+	    LOG_INF("Restored key %d: id=%d, addr=%s, keys=%u, SC LTK=%s", i, key_pool[i].id, bt_addr_le_str(&key_pool[i].addr), key_pool[i].keys, bt_hex(ltk, key_pool[i].enc_size));
+	// }
+
+	bt_keys_store(&key_pool[0]);
+	LOG_INF("Stored key from key_pool in non-volatile memory.");
+}
+
+int bt_get_irk(uint8_t id, uint8_t *irk){
+
+	if(id > bt_dev.id_count){
+		return -EINVAL;
+	}
+
+	memcpy(irk, bt_dev.irk[id], 16);
+
+	return 0;
+}
+
+int bt_get_identity(uint8_t id, bt_addr_le_t *addr){
+
+	if(id > bt_dev.id_count){
+		return -EINVAL;
+	}
+
+	*addr = bt_dev.id_addr[id];
+
+	return 0;
+}
+
+int save_bonding_keys(const bt_addr_le_t *addr) {
+	struct bt_conn *conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, addr);
+	if (!conn) {
+		LOG_DBG("save_bonding(): couldnt find connection.");
+		return -1;  // Connection not found
+	}
+
+	// Extract the keys from the connection object
+	struct bt_keys *keys = conn->le.keys;
+	if (!keys) {
+		LOG_DBG("save_bonding(): couldnt find keys.");
+		bt_conn_unref(conn);
+		return -1;  // No keys associated with this connection
+	}
+
+	// Copy the keys to your storage (e.g., saved_keys or persistent storage)
+	memcpy(&saved_keys[0], keys, sizeof(struct bt_keys));  // Storing just the first one for simplicity
+	LOG_DBG("Saved bt_keys!");
+
+	bt_conn_unref(conn);
+	return 0;  // Success
+
+}
+// Function to reinject keys into the connection
+int reinject_bonding_keys(const bt_addr_le_t *addr) {
+
+	struct bt_conn *conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, addr);
+	if (!conn) {
+		LOG_DBG("reinject_bonding(): couldnt find connection.");
+		return -1;  // Connection not found
+	}
+
+	struct bt_keys *keys = conn->le.keys;
+	/*
+	if (!keys) {
+	LOG_DBG("reinject_bonding(): couldnt find keys.");
+		bt_conn_unref(conn);
+		return -2;  // No keys associated with this connection
+	}
+	*/
+
+	// Reinject the saved keys (from saved_keys or persistent storage)
+	memcpy(keys, &saved_keys[0], sizeof(struct bt_keys));  // Reinject the first saved key
+
+	int err = bt_conn_set_security(conn, BT_SECURITY_L2);
+	if (err) {
+		LOG_DBG("reinject_bonding(): couldnt set security level.");
+		bt_conn_unref(conn);
+		return err;
+	}
+
+	bt_conn_unref(conn);
+	return 0;
+}

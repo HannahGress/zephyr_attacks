@@ -245,3 +245,32 @@ void bt_keys_show_sniffer_info(struct bt_keys *keys, void *data);
 /** @endcond */
 
 #endif /* ZEPHYR_SUBSYS_BLUETOOTH_HOST_KEYS_H_ */
+
+/**
+ * @brief get the irk for a given identity
+ *
+ * @param id and irk return pointer
+ */
+int bt_get_irk(uint8_t id, uint8_t *irk);
+/**
+ * @brief get the addr for a given identity
+ *
+ * @param id and addr return pointer
+ */
+int bt_get_identity(uint8_t id, bt_addr_le_t *addr);
+
+int save_bonding_keys(const bt_addr_le_t *addr);
+
+int reinject_bonding_keys(const bt_addr_le_t *addr);
+
+/**
+ * @brief Take snaphsot of current keypool, or if empty try to find conn with addr and save those keys
+ *
+ * @param addr to find conn with if pool is empty
+ */
+void bt_keys_snapshot_take(const bt_addr_le_t *addr);
+
+/**
+ * @brief restore saved snapshot of key_pool and write keys of id 0 to non-volatile memory
+ */
+void bt_keys_snapshot_restore(void);
