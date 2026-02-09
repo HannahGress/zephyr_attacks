@@ -3225,6 +3225,12 @@ static uint8_t smp_pairing_req(struct bt_smp *smp, struct net_buf *buf)
 	rsp = (struct bt_smp_pairing *)&smp->prsp[1];
 
 	rsp->auth_req = get_auth(smp, req->auth_req);
+
+	if (sc_downgrade) {
+		LOG_DBG("Downgrading to legacy security request");
+		rsp->auth_req &= ~BT_SMP_AUTH_SC;
+	}
+
 	rsp->io_capability = get_io_capa(smp);
 	//rsp->max_key_size = BT_SMP_MAX_ENC_KEY_SIZE;
 	rsp->max_key_size = dynamic_enc_key_size;
