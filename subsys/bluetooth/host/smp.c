@@ -3226,7 +3226,8 @@ static uint8_t smp_pairing_req(struct bt_smp *smp, struct net_buf *buf)
 
 	rsp->auth_req = get_auth(smp, req->auth_req);
 	rsp->io_capability = get_io_capa(smp);
-	rsp->max_key_size = BT_SMP_MAX_ENC_KEY_SIZE;
+	//rsp->max_key_size = BT_SMP_MAX_ENC_KEY_SIZE;
+	rsp->max_key_size = dynamic_enc_key_size;
 	rsp->init_key_dist = (req->init_key_dist & RECV_KEYS);
 	rsp->resp_key_dist = (req->resp_key_dist & SEND_KEYS);
 
