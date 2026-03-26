@@ -4,7 +4,6 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-
 #include <nrf_erratas.h>
 
 /* Use the NRF_RTC instance for coarse radio event scheduling */

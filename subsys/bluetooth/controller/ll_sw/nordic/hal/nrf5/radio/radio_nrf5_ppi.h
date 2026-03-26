@@ -4,6 +4,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <hal/nrf_ppi.h>
 
 #if defined(CONFIG_BT_CTLR_PHY_CODED)
 /* The 2 adjacent TIMER EVENTS_COMPARE event offsets used for implementing
@@ -292,6 +293,14 @@ static inline void hal_trigger_aar_ppi_config(void)
 
 #if !defined(CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER)
 
+/* Start SW-switch timer on event timer start.
+ */
+static inline void hal_sw_switch_timer_start_ppi_config(void)
+{
+	nrf_ppi_fork_endpoint_setup(NRF_PPI, HAL_EVENT_TIMER_START_PPI,
+				    (uint32_t)&(SW_SWITCH_TIMER->TASKS_START));
+}
+
 /* Clear SW-switch timer on packet end:
  * wire the RADIO EVENTS_END event to SW_SWITCH_TIMER TASKS_CLEAR task.
  *
@@ -303,7 +312,7 @@ static inline void hal_sw_switch_timer_clear_ppi_config(void)
 	nrf_ppi_channel_endpoint_setup(
 		NRF_PPI,
 		HAL_SW_SWITCH_TIMER_CLEAR_PPI,
-		(uint32_t)&(NRF_RADIO->HAL_RADIO_IFS_EVENTS_END),
+		(uint32_t)&(NRF_RADIO->EVENTS_END),
 		(uint32_t)&(SW_SWITCH_TIMER->TASKS_CLEAR));
 }
 
@@ -364,7 +373,7 @@ static inline void hal_sw_switch_timer_clear_ppi_config(void)
  * 'index' must be 0 or 1.
  */
 #define HAL_SW_SWITCH_GROUP_TASK_ENABLE_PPI_EVT \
-	((uint32_t)&(NRF_RADIO->HAL_RADIO_IFS_EVENTS_END))
+	((uint32_t)&(NRF_RADIO->EVENTS_END))
 #define HAL_SW_SWITCH_GROUP_TASK_ENABLE_PPI_TASK(index) \
 	((uint32_t)&(NRF_PPI->TASKS_CHG[SW_SWITCH_TIMER_TASK_GROUP(index)].EN))
 
@@ -702,3 +711,17 @@ static inline void hal_radio_sw_switch_ppi_group_setup(void)
 }
 
 #endif /* !CONFIG_BT_CTLR_TIFS_HW */
+
+/*
+ * For benchmarking the nRF53840
+ * PPI chanel 0 for capture the time when encryption is finished
+ */
+
+static inline void hal_radio_ccm_endcrypt_time_capture_ppi_config(void)
+{
+	nrf_ppi_channel_endpoint_setup(
+		NRF_PPI,
+		HAL_CRYPT_END_TIME_CAPTURE_PPI,
+		(uint32_t)&(NRF_CCM->EVENTS_ENDCRYPT),
+		(uint32_t)&(EVENT_TIMER->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_END_CC_OFFSET]));
+}

@@ -146,6 +146,7 @@ NRF_DT_CHECK_GPIO_CTLR_IS_SOC(FEM_NODE, pdn_gpios, "pdn-gpios");
 
 static radio_isr_cb_t isr_cb;
 static void           *isr_cb_param;
+uint32_t delta_encryption_time;
 
 void isr_radio(void)
 {
@@ -2545,6 +2546,10 @@ uint32_t radio_ccm_is_done(void)
 	}
 	nrf_ccm_int_disable(NRF_CCM, CCM_INTENCLR_ENDCRYPT_Msk);
 	NVIC_ClearPendingIRQ(nrfx_get_irq_number(NRF_CCM));
+
+	uint32_t t_start = EVENT_TIMER->CC[1];
+	uint32_t t_end   = EVENT_TIMER->CC[4];
+	delta_encryption_time = t_end - t_start;
 
 	return (NRF_CCM->EVENTS_ERROR == 0);
 }

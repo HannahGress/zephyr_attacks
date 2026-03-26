@@ -230,6 +230,12 @@
 #define HAL_EVENT_TIMER_SAMPLE_CC_OFFSET       3
 #define HAL_EVENT_TIMER_SAMPLE_TASK            NRF_TIMER_TASK_CAPTURE3
 
+/*
+ * For benchmarking the nRF53840
+ * Timer offset for capture the time when encryption is finished
+ */
+#define HAL_EVENT_TIMER_CCM_END_CC_OFFSET      4
+
 #define HAL_EVENT_TIMER_PA_LNA_CC_OFFSET       2
 #define HAL_EVENT_TIMER_PA_LNA_PDN_CC_OFFSET   3
 #endif /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */

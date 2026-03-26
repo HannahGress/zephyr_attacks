@@ -196,3 +196,10 @@
 #define SW_SWITCH_TIMER_TASK_GROUP_BASE       0
 #define SW_SWITCH_SINGLE_TIMER_TASK_GROUP_IDX 2
 #endif /* !CONFIG_BT_CTLR_TIFS_HW */
+
+/*
+ * For benchmarking the nRF53840
+ * PPI chanel 0 for capture the time when encryption is finished
+ */
+
+#define HAL_CRYPT_END_TIME_CAPTURE_PPI 0

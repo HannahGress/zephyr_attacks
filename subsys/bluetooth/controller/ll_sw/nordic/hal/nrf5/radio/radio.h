@@ -56,6 +56,8 @@ enum radio_end_evt_delay_state { END_EVT_DELAY_DISABLED, END_EVT_DELAY_ENABLED }
 
 typedef void (*radio_isr_cb_t) (void *param);
 
+extern uint32_t delta_encryption_time;
+
 void isr_radio(void);
 void radio_isr_set(radio_isr_cb_t cb, void *param);
 
