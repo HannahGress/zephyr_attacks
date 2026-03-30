@@ -145,8 +145,7 @@ NRF_DT_CHECK_GPIO_CTLR_IS_SOC(FEM_NODE, pdn_gpios, "pdn-gpios");
 #define DF_S0_MASK_CP_BIT_IN_DATA_CHANNEL_PDU 0x20
 
 static radio_isr_cb_t isr_cb;
-static void           *isr_cb_param;
-uint32_t delta_encryption_time;
+static void *isr_cb_param;
 
 void isr_radio(void)
 {
@@ -2538,6 +2537,10 @@ void *radio_ccm_iso_tx_pkt_set(struct ccm *cnf, uint8_t pdu_type, void *pkt)
 }
 #endif /* CONFIG_BT_CTLR_LE_ENC || CONFIG_BT_CTLR_ADV_ISO */
 
+volatile uint32_t t_start;
+volatile uint32_t t_end;
+volatile uint32_t delta_encryption_time;
+
 uint32_t radio_ccm_is_done(void)
 {
 	nrf_ccm_int_enable(NRF_CCM, CCM_INTENSET_ENDCRYPT_Msk);
@@ -2547,8 +2550,8 @@ uint32_t radio_ccm_is_done(void)
 	nrf_ccm_int_disable(NRF_CCM, CCM_INTENCLR_ENDCRYPT_Msk);
 	NVIC_ClearPendingIRQ(nrfx_get_irq_number(NRF_CCM));
 
-	uint32_t t_start = EVENT_TIMER->CC[1];
-	uint32_t t_end   = EVENT_TIMER->CC[4];
+	t_start = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_CC_OFFSET];
+	t_end   = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_CC_OFFSET];
 	delta_encryption_time = t_end - t_start;
 
 	return (NRF_CCM->EVENTS_ERROR == 0);

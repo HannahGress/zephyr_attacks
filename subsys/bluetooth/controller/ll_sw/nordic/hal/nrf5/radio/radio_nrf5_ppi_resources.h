@@ -199,7 +199,8 @@
 
 /*
  * For benchmarking the nRF53840
- * PPI chanel 0 for capture the time when encryption is finished
+ * PPI chanel 0 for capture the time when encryption starts
+ * PPI chanel 18 for capture the time when encryption is finished
  */
-
-#define HAL_CRYPT_END_TIME_CAPTURE_PPI 0
+#define HAL_CRYPT_START_TIME_CAPTURE_PPI 0
+#define HAL_CRYPT_END_TIME_CAPTURE_PPI 18

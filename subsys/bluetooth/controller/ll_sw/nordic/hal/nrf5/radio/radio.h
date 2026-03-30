@@ -56,8 +56,6 @@ enum radio_end_evt_delay_state { END_EVT_DELAY_DISABLED, END_EVT_DELAY_ENABLED }
 
 typedef void (*radio_isr_cb_t) (void *param);
 
-extern uint32_t delta_encryption_time;
-
 void isr_radio(void);
 void radio_isr_set(radio_isr_cb_t cb, void *param);
 
@@ -194,3 +192,7 @@ uint8_t radio_ar_resolve(const uint8_t *addr);
  * switching according to CTEInfo in received PDU.
  */
 void radio_df_cte_inline_set_enabled(bool cte_info_in_s1);
+
+volatile extern uint32_t t_start;
+volatile extern uint32_t t_end;
+volatile extern uint32_t delta_encryption_time;
