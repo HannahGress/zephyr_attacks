@@ -638,8 +638,22 @@ uint32_t radio_is_done(void)
 }
 
 #else /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
+
+volatile uint32_t t_start;
+volatile uint32_t t_end;
+volatile uint32_t delta_encryption_time;
+volatile uint32_t enc_count;
+
 uint32_t radio_is_done(void)
 {
+	// readout encryption time start and end timers
+	//t_start = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_CC_OFFSET];
+	t_end   = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_CC_OFFSET];
+
+	// calculate delta and sum up the global time for all x packets sent
+	//delta_encryption_time = t_end - t_start;
+	enc_count++;
+
 	return (NRF_RADIO->HAL_RADIO_TRX_EVENTS_END != 0);
 }
 #endif /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
@@ -2537,10 +2551,6 @@ void *radio_ccm_iso_tx_pkt_set(struct ccm *cnf, uint8_t pdu_type, void *pkt)
 }
 #endif /* CONFIG_BT_CTLR_LE_ENC || CONFIG_BT_CTLR_ADV_ISO */
 
-volatile uint32_t t_start;
-volatile uint32_t t_end;
-volatile uint32_t delta_encryption_time;
-
 uint32_t radio_ccm_is_done(void)
 {
 	nrf_ccm_int_enable(NRF_CCM, CCM_INTENSET_ENDCRYPT_Msk);
@@ -2549,10 +2559,6 @@ uint32_t radio_ccm_is_done(void)
 	}
 	nrf_ccm_int_disable(NRF_CCM, CCM_INTENCLR_ENDCRYPT_Msk);
 	NVIC_ClearPendingIRQ(nrfx_get_irq_number(NRF_CCM));
-
-	t_start = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_CC_OFFSET];
-	t_end   = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_CC_OFFSET];
-	delta_encryption_time = t_end - t_start;
 
 	return (NRF_CCM->EVENTS_ERROR == 0);
 }

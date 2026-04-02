@@ -719,12 +719,13 @@ static inline void hal_radio_sw_switch_ppi_group_setup(void)
 
 static inline void hal_radio_ccm_endcrypt_time_capture_ppi_config(void)
 {
-	// when encryption start -> clear timer / set to 0
+	// when encryption starts -> set actual time
 	nrf_ppi_channel_endpoint_setup(
 	NRF_PPI,
 	HAL_CRYPT_START_TIME_CAPTURE_PPI,
 	(uint32_t)&NRF_RADIO->EVENTS_ADDRESS,
-	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_CC_OFFSET]);
+	//(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_CC_OFFSET]);
+	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
 
 	// when encryption ends -> set actual time
 	nrf_ppi_channel_endpoint_setup(

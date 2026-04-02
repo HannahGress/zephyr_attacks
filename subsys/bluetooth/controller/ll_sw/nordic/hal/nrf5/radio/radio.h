@@ -196,3 +196,4 @@ void radio_df_cte_inline_set_enabled(bool cte_info_in_s1);
 volatile extern uint32_t t_start;
 volatile extern uint32_t t_end;
 volatile extern uint32_t delta_encryption_time;
+volatile extern uint32_t enc_count;
