@@ -714,23 +714,64 @@ static inline void hal_radio_sw_switch_ppi_group_setup(void)
 
 /*
  * For benchmarking the nRF53840
- * PPI chanel 0 for capture the time when encryption is finished
  */
 
-static inline void hal_radio_ccm_endcrypt_time_capture_ppi_config(void)
+static void hal_radio_ccm_decrypt_time_capture_ppi_config(void) {
+
+	// when KSGEN starts & payload > 20 Bytes (for decryption)
+	nrf_ppi_channel_endpoint_setup(
+	NRF_PPI,
+	HAL_CRYPT_START_TIME_KSGEN_PPI,
+	(uint32_t)&NRF_RADIO->EVENTS_RXREADY,
+	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
+
+	// when decryption starts (closer to it) -> set actual time
+	nrf_ppi_channel_endpoint_setup(
+	NRF_PPI,
+	HAL_CRYPT_START_TIME_CAPTURE_ENDCRYPT_PPI,
+	(uint32_t)&NRF_RADIO->EVENTS_PAYLOAD,
+	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_ENDCRYPT_CC_OFFSET]);
+
+}
+
+static void hal_radio_ccm_encrypt_time_capture_ppi_config(void)
 {
+	// when KSGEN starts & payload > 20 Bytes (for encryption)
+	nrf_ppi_channel_endpoint_setup(
+	NRF_PPI,
+	HAL_CRYPT_START_TIME_KSGEN_PPI,
+	(uint32_t)&NRF_RADIO->EVENTS_TXREADY,
+	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
+
 	// when encryption starts -> set actual time
 	nrf_ppi_channel_endpoint_setup(
 	NRF_PPI,
-	HAL_CRYPT_START_TIME_CAPTURE_PPI,
+	HAL_CRYPT_START_TIME_CAPTURE_ENDCRYPT_PPI,
 	(uint32_t)&NRF_RADIO->EVENTS_ADDRESS,
-	//(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_CC_OFFSET]);
+	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_ENDCRYPT_CC_OFFSET]);
+
+}
+
+static void hal_radio_ccm_en_de_crypt_time_capture_ppi_config(void) {
+
+	// when KSGEN starts & payload <= 20 Bytes (for both for encryption and decryption)
+	nrf_ppi_channel_endpoint_setup(
+	NRF_PPI,
+	HAL_CRYPT_START_TIME_KSGEN_PPI,
+	(uint32_t)&NRF_RADIO->EVENTS_READY,
 	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
 
-	// when encryption ends -> set actual time
+	// when KSGEN ends (for both for encryption and decryption)
+	nrf_ppi_channel_endpoint_setup(
+	NRF_PPI,
+	HAL_CRYPT_END_TIME_KSGEN_PPI,
+	(uint32_t)&NRF_CCM->EVENTS_ENDKSGEN,
+	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_END_KSGEN_CC_OFFSET]);
+
+	// when encryption and decryption ends -> set actual time
 	nrf_ppi_channel_endpoint_setup(
 		NRF_PPI,
-		HAL_CRYPT_END_TIME_CAPTURE_PPI,
+		HAL_CRYPT_END_TIME_CAPTURE_ENDCRYPT_PPI,
 		(uint32_t)&(NRF_CCM->EVENTS_ENDCRYPT),
-		(uint32_t)&(NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_END_CC_OFFSET]));
+		(uint32_t)&(NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET]));
 }

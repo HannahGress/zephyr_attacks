@@ -199,8 +199,18 @@
 
 /*
  * For benchmarking the nRF53840
- * PPI chanel 0 for capture the time when encryption starts
- * PPI chanel 18 for capture the time when encryption is finished
  */
-#define HAL_CRYPT_START_TIME_CAPTURE_PPI 0
-#define HAL_CRYPT_END_TIME_CAPTURE_PPI 18
+
+/*
+ * channel for KSGEN start and end is the same for encryption and decryption with payload <=20 bytes
+ * and for both with payload >20 bytes
+ */
+#define HAL_CRYPT_START_TIME_KSGEN_PPI 0
+#define HAL_CRYPT_END_TIME_KSGEN_PPI 1
+
+/*
+ * channel to capture start & end of encryption or decryption
+ */
+#define HAL_CRYPT_START_TIME_CAPTURE_ENDCRYPT_PPI 2
+
+#define HAL_CRYPT_END_TIME_CAPTURE_ENDCRYPT_PPI 3
