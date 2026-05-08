@@ -714,9 +714,10 @@ static inline void hal_radio_sw_switch_ppi_group_setup(void)
 
 /*
  * For benchmarking the nRF53840
+ * check documentation for HW trigger: https://docs.nordicsemi.com/bundle/ps_nrf52840/page/ccm.html
  */
 
-static void hal_radio_ccm_decrypt_time_capture_ppi_config(void) {
+static void hal_radio_ccm_decrypt_start_time_dle_ppi_config(void) {
 
 	// when KSGEN starts & payload > 20 Bytes (for decryption)
 	nrf_ppi_channel_endpoint_setup(
@@ -734,7 +735,7 @@ static void hal_radio_ccm_decrypt_time_capture_ppi_config(void) {
 
 }
 
-static void hal_radio_ccm_encrypt_time_capture_ppi_config(void)
+static void hal_radio_ccm_encrypt_start_time_dle_ppi_config(void)
 {
 	// when KSGEN starts & payload > 20 Bytes (for encryption)
 	nrf_ppi_channel_endpoint_setup(
@@ -752,14 +753,7 @@ static void hal_radio_ccm_encrypt_time_capture_ppi_config(void)
 
 }
 
-static void hal_radio_ccm_en_de_crypt_time_capture_ppi_config(void) {
-
-	// when KSGEN starts & payload <= 20 Bytes (for both for encryption and decryption)
-	nrf_ppi_channel_endpoint_setup(
-	NRF_PPI,
-	HAL_CRYPT_START_TIME_KSGEN_PPI,
-	(uint32_t)&NRF_RADIO->EVENTS_READY,
-	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
+static void hal_radio_ccm_en_de_crypt_end_time_capture_ppi_config(void) {
 
 	// when KSGEN ends (for both for encryption and decryption)
 	nrf_ppi_channel_endpoint_setup(
@@ -774,4 +768,15 @@ static void hal_radio_ccm_en_de_crypt_time_capture_ppi_config(void) {
 		HAL_CRYPT_END_TIME_CAPTURE_ENDCRYPT_PPI,
 		(uint32_t)&(NRF_CCM->EVENTS_ENDCRYPT),
 		(uint32_t)&(NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET]));
+}
+
+static void hal_radio_ccm_en_de_crypt_start_time_no_dle_ppi_config(void) {
+
+	// when KSGEN starts & payload <= 20 Bytes (for both for encryption and decryption)
+	nrf_ppi_channel_endpoint_setup(
+	NRF_PPI,
+	HAL_CRYPT_START_TIME_KSGEN_PPI,
+	(uint32_t)&NRF_RADIO->EVENTS_READY,
+	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
+
 }

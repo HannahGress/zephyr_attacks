@@ -639,16 +639,22 @@ uint32_t radio_is_done(void)
 
 #else /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
 
-volatile uint32_t t_start;
-volatile uint32_t t_end;
-volatile uint32_t delta_encryption_time;
+volatile uint32_t t_end_KSGEN;
+volatile uint32_t t_start_ENDCRYPT;
+volatile uint32_t t_end_ENDCRYPT;
 volatile uint32_t enc_count;
 
 uint32_t radio_is_done(void)
 {
+	// readout end times of KSGEN, encryption and decryption
+
+	t_end_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_KSGEN_CC_OFFSET];
+	t_start_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_ENDCRYPT_CC_OFFSET];
+	t_end_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
+
 	// readout encryption time start and end timers
 	//t_start = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_CC_OFFSET];
-	t_end   = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_CC_OFFSET];
+	// t_end   = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_CC_OFFSET];
 
 	// calculate delta and sum up the global time for all x packets sent
 	//delta_encryption_time = t_end - t_start;
