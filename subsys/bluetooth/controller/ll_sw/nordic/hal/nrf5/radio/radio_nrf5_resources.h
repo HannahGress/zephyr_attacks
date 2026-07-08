@@ -237,9 +237,9 @@
 
 /*
  * For benchmarking the nRF53840
- * Timer offset for capture the time when de-/encryption is finished
+ * Timer offsets /variables for capturing start and end of KSGEN and de-/encryption
  */
-#define HAL_EVENT_TIMER_CCM_END_KSGEN_CC_OFFSET   0
-#define HAL_EVENT_TIMER_CCM_START_ENDCRYPT_CC_OFFSET 1
+#define HAL_EVENT_TIMER_CCM_START_ENCRYPT_CC_OFFSET 0
+#define HAL_EVENT_TIMER_CCM_START_DECRYPT_CC_OFFSET 1
 #define HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET 2
 

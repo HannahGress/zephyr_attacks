@@ -717,66 +717,61 @@ static inline void hal_radio_sw_switch_ppi_group_setup(void)
  * check documentation for HW trigger: https://docs.nordicsemi.com/bundle/ps_nrf52840/page/ccm.html
  */
 
-static void hal_radio_ccm_decrypt_start_time_dle_ppi_config(void) {
+static void hal_radio_ccm_nRF52840_ppi_config(void) {
 
-	// when KSGEN starts & payload > 20 Bytes (for decryption)
+	// when encryption starts -> take actual time
 	nrf_ppi_channel_endpoint_setup(
 	NRF_PPI,
-	HAL_CRYPT_START_TIME_KSGEN_PPI,
-	(uint32_t)&NRF_RADIO->EVENTS_RXREADY,
-	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
-
-	// when decryption starts (closer to it) -> set actual time
-	nrf_ppi_channel_endpoint_setup(
-	NRF_PPI,
-	HAL_CRYPT_START_TIME_CAPTURE_ENDCRYPT_PPI,
-	(uint32_t)&NRF_RADIO->EVENTS_PAYLOAD,
-	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_ENDCRYPT_CC_OFFSET]);
-
-}
-
-static void hal_radio_ccm_encrypt_start_time_dle_ppi_config(void)
-{
-	// when KSGEN starts & payload > 20 Bytes (for encryption)
-	nrf_ppi_channel_endpoint_setup(
-	NRF_PPI,
-	HAL_CRYPT_START_TIME_KSGEN_PPI,
-	(uint32_t)&NRF_RADIO->EVENTS_TXREADY,
-	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
-
-	// when encryption starts -> set actual time
-	nrf_ppi_channel_endpoint_setup(
-	NRF_PPI,
-	HAL_CRYPT_START_TIME_CAPTURE_ENDCRYPT_PPI,
+	HAL_CRYPT_START_TIME_ENCRYPT_PPI,
 	(uint32_t)&NRF_RADIO->EVENTS_ADDRESS,
-	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_ENDCRYPT_CC_OFFSET]);
+	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_ENCRYPT_CC_OFFSET]);
 
-}
-
-static void hal_radio_ccm_en_de_crypt_end_time_capture_ppi_config(void) {
-
-	// when KSGEN ends (for both for encryption and decryption)
+	// when decryption starts (closer to it)
 	nrf_ppi_channel_endpoint_setup(
 	NRF_PPI,
-	HAL_CRYPT_END_TIME_KSGEN_PPI,
-	(uint32_t)&NRF_CCM->EVENTS_ENDKSGEN,
-	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_END_KSGEN_CC_OFFSET]);
+	HAL_CRYPT_START_TIME_DECRYPT_PPI,
+	(uint32_t)&NRF_RADIO->EVENTS_PAYLOAD,
+	(uint32_t)&NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_START_DECRYPT_CC_OFFSET]);
 
-	// when encryption and decryption ends -> set actual time
+	// when encryption and decryption ends
 	nrf_ppi_channel_endpoint_setup(
 		NRF_PPI,
-		HAL_CRYPT_END_TIME_CAPTURE_ENDCRYPT_PPI,
+		HAL_CRYPT_END_TIME_ENDCRYPT_PPI,
 		(uint32_t)&(NRF_CCM->EVENTS_ENDCRYPT),
 		(uint32_t)&(NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET]));
 }
 
-static void hal_radio_ccm_en_de_crypt_start_time_no_dle_ppi_config(void) {
+#include <nrfx_dppi.h>
+#include <hal/nrf_radio.h>
+#include <hal/nrf_timer.h>
 
-	// when KSGEN starts & payload <= 20 Bytes (for both for encryption and decryption)
-	nrf_ppi_channel_endpoint_setup(
-	NRF_PPI,
-	HAL_CRYPT_START_TIME_KSGEN_PPI,
-	(uint32_t)&NRF_RADIO->EVENTS_READY,
-	(uint32_t)&NRF_TIMER3->TASKS_CLEAR);
 
+static void hal_radio_ccm_nRF54L15_ppi_config(void) {
+	uint8_t enc_start_dppi;
+	uint8_t decr_start_dppi;
+	uint8_t endcrypt_end_dppi;
+
+	nrfx_dppi_t dppi10 = NRFX_DPPI_INSTANCE(10);
+
+	nrfx_err_t err = nrfx_dppi_channel_alloc(&dppi10, &enc_start_dppi);
+	if (err != NRFX_SUCCESS) {
+		//printk("DPPI alloc failed: %d\n", err);
+		return;
+	}
+
+	/* RADIO READY published auf DPPI channel */
+	nrf_radio_publish_set(
+		NRF_RADIO,
+		NRF_RADIO_EVENT_READY,
+		enc_start_dppi
+	);
+
+	/* TIMER capture subscribed auf denselben DPPI channel */
+	nrf_timer_subscribe_set(
+		NRF_TIMER10,
+		NRF_TIMER_TASK_CAPTURE0,
+		enc_start_dppi
+	);
+
+	nrfx_dppi_channel_enable(enc_start_dppi);
 }

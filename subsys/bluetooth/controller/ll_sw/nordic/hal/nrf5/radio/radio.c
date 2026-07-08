@@ -639,26 +639,35 @@ uint32_t radio_is_done(void)
 
 #else /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
 
-volatile uint32_t t_end_KSGEN;
-volatile uint32_t t_start_ENDCRYPT;
-volatile uint32_t t_end_ENDCRYPT;
-volatile uint32_t enc_count;
+// variables to store the time for each time point in the encr/decr chain
+uint32_t t_start_ENCRYPT;
+uint32_t t_start_DECRYPT;
+uint32_t t_end_ENDCRYPT;
+uint32_t enc_count;
+bool is_benchmarking;
+uint32_t delta_ENCRYPT;
+uint32_t delta_DECRYPT;
+uint32_t values_ENCRYPT[SUM_ARRAY_MAX_SIZE];
+uint32_t values_DECRYPT[SUM_ARRAY_MAX_SIZE];
 
 uint32_t radio_is_done(void)
 {
-	// readout end times of KSGEN, encryption and decryption
+	// readout end times of encryption / decryption
 
-	t_end_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_KSGEN_CC_OFFSET];
-	t_start_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_ENDCRYPT_CC_OFFSET];
+	t_start_ENCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_ENCRYPT_CC_OFFSET];
+	t_start_DECRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_DECRYPT_CC_OFFSET];
 	t_end_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
 
-	// readout encryption time start and end timers
-	//t_start = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_CC_OFFSET];
-	// t_end   = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_CC_OFFSET];
+	// calculate the encr/decr time
+	delta_ENCRYPT = t_end_ENDCRYPT - t_start_ENCRYPT;
+	delta_DECRYPT = t_end_ENDCRYPT - t_start_ENCRYPT;
 
-	// calculate delta and sum up the global time for all x packets sent
-	//delta_encryption_time = t_end - t_start;
-	enc_count++;
+	if (is_benchmarking && enc_count < SUM_ARRAY_MAX_SIZE) {
+		// we want to store the results in our arrays
+		values_ENCRYPT[enc_count] = delta_ENCRYPT;
+		values_DECRYPT[enc_count] = delta_DECRYPT;
+		enc_count++;
+	}
 
 	return (NRF_RADIO->HAL_RADIO_TRX_EVENTS_END != 0);
 }
@@ -2404,13 +2413,13 @@ static void *radio_ccm_ext_tx_pkt_set(struct ccm *cnf, uint8_t pdu_type, void *p
 
 	/* Enable CCM support for 8-bit length field PDUs. */
 	mode |= (CCM_MODE_LENGTH_Extended << CCM_MODE_LENGTH_Pos) &
-		CCM_MODE_LENGTH_Msk;
+			CCM_MODE_LENGTH_Msk;
 
 	/* NOTE: use fastest data rate as tx data needs to be prepared before
 	 * radio Tx on any PHY.
 	 */
 	mode |= (CCM_MODE_DATARATE_2Mbit << CCM_MODE_DATARATE_Pos) &
-		CCM_MODE_DATARATE_Msk;
+			CCM_MODE_DATARATE_Msk;
 
 #elif defined(CONFIG_SOC_SERIES_NRF51X)
 	mode = (CCM_MODE_MODE_Encryption << CCM_MODE_MODE_Pos) &
