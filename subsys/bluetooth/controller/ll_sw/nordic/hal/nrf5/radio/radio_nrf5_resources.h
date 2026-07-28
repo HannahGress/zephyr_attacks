@@ -7,6 +7,7 @@
 /* Use the timer instance ID, not NRF_TIMERx directly, so that it can be checked
  * in radio_nrf5_ppi.h by the preprocessor.
  */
+
 #if defined(CONFIG_BT_CTLR_TIFS_HW)
 #define EVENT_TIMER_ID 0
 #define EVENT_TIMER    _CONCAT(NRF_TIMER, EVENT_TIMER_ID)
@@ -49,7 +50,17 @@
 
 #else /* !CONFIG_BT_CTLR_TIFS_HW */
 #if defined(CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER)
+
+
+#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
 #define EVENT_TIMER_ID 4
+#elif defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
+#define EVENT_TIMER_ID 24
+#else
+#error "Unsupported SoC for EVENT_TIMER"
+#endif
+
+// #define EVENT_TIMER_ID 4 -> original line
 #define EVENT_TIMER    _CONCAT(NRF_TIMER, EVENT_TIMER_ID)
 
 #define SW_SWITCH_TIMER EVENT_TIMER
@@ -234,12 +245,3 @@
 #define HAL_EVENT_TIMER_PA_LNA_PDN_CC_OFFSET   3
 #endif /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
 #endif /* !CONFIG_BT_CTLR_TIFS_HW */
-
-/*
- * For benchmarking the nRF53840
- * Timer offsets /variables for capturing start and end of KSGEN and de-/encryption
- */
-#define HAL_EVENT_TIMER_CCM_START_ENCRYPT_CC_OFFSET 0
-#define HAL_EVENT_TIMER_CCM_START_DECRYPT_CC_OFFSET 1
-#define HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET 2
-

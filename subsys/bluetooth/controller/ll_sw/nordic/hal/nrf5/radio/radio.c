@@ -28,6 +28,11 @@
 
 #include "radio_internal.h"
 
+// include the nRF52_54_ppi_dppi header
+#if defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
+#include "../../../../app_attacks/src/nRF52_54_ppi_dppi.h"
+#endif
+
 /* Converts the GPIO controller in a FEM property's GPIO specification
  * to its nRF register map pointer.
  *
@@ -623,8 +628,39 @@ static void last_pdu_end_us_init(uint32_t latency_us)
 	last_pdu_end_us = 0U;
 }
 
+#if defined(CONFIG_SOC_COMPATIBLE_NRF52X) || defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
+// variables to store the time for each time point in the encr/decr chain
+bool is_benchmarking;
+uint32_t t_start_ENCRYPT;
+uint32_t t_start_DECRYPT;
+uint32_t t_end_ENDCRYPT;
+uint32_t enc_count;
+uint32_t delta_ENCRYPT;
+uint32_t delta_DECRYPT;
+uint32_t values_ENCRYPT[SUM_ARRAY_MAX_SIZE];
+uint32_t values_DECRYPT[SUM_ARRAY_MAX_SIZE];
+
+#endif
+
 uint32_t radio_is_done(void)
 {
+	#if defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
+	t_start_ENCRYPT = NRF_TIMER10->CC[ENCRYPT_START_DPPI_CHANNEL];
+	t_start_DECRYPT = NRF_TIMER10->CC[DECRYPT_START_DPPI_CHANNEL];
+	t_end_ENDCRYPT = NRF_TIMER10->CC[ENDCRYPT_END_DPPI_CHANNEL];
+
+	// calculate the encr/decr time
+	delta_ENCRYPT = t_end_ENDCRYPT - t_start_ENCRYPT;
+	delta_DECRYPT = t_end_ENDCRYPT - t_start_ENCRYPT;
+
+	if (is_benchmarking && enc_count < SUM_ARRAY_MAX_SIZE) {
+		// we want to store the results in our arrays
+		values_ENCRYPT[enc_count] = delta_ENCRYPT;
+		values_DECRYPT[enc_count] = delta_DECRYPT;
+		enc_count++;
+	}
+	#endif
+
 	if (NRF_RADIO->HAL_RADIO_TRX_EVENTS_END != 0) {
 		/* On packet END event increment last packet end time value.
 		 * Note: this depends on the function being called exactly once
@@ -639,19 +675,10 @@ uint32_t radio_is_done(void)
 
 #else /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
 
-// variables to store the time for each time point in the encr/decr chain
-uint32_t t_start_ENCRYPT;
-uint32_t t_start_DECRYPT;
-uint32_t t_end_ENDCRYPT;
-uint32_t enc_count;
-bool is_benchmarking;
-uint32_t delta_ENCRYPT;
-uint32_t delta_DECRYPT;
-uint32_t values_ENCRYPT[SUM_ARRAY_MAX_SIZE];
-uint32_t values_DECRYPT[SUM_ARRAY_MAX_SIZE];
 
 uint32_t radio_is_done(void)
 {
+	#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
 	// readout end times of encryption / decryption
 
 	t_start_ENCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_ENCRYPT_CC_OFFSET];
@@ -668,6 +695,7 @@ uint32_t radio_is_done(void)
 		values_DECRYPT[enc_count] = delta_DECRYPT;
 		enc_count++;
 	}
+	#endif
 
 	return (NRF_RADIO->HAL_RADIO_TRX_EVENTS_END != 0);
 }

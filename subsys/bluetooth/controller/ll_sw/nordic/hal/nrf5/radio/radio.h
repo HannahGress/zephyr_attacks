@@ -4,6 +4,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+
 #pragma once
 
 #include <stdint.h>
@@ -195,17 +196,3 @@ uint8_t radio_ar_resolve(const uint8_t *addr);
  * switching according to CTEInfo in received PDU.
  */
 void radio_df_cte_inline_set_enabled(bool cte_info_in_s1);
-
-// variables to store the time for each time point in the encr/decr chain
-extern uint32_t t_start_ENCRYPT;
-extern uint32_t t_start_DECRYPT;
-extern uint32_t t_end_ENDCRYPT;
-extern uint32_t enc_count;
-//we must ensure that enc_count is only used while benchmarking
-extern bool is_benchmarking;
-extern uint32_t delta_ENCRYPT;
-extern uint32_t delta_DECRYPT;
-// we allow a maximum of 100 packets transmitted per send_data() method
-#define SUM_ARRAY_MAX_SIZE 100
-extern uint32_t values_ENCRYPT[SUM_ARRAY_MAX_SIZE];
-extern uint32_t values_DECRYPT[SUM_ARRAY_MAX_SIZE];
