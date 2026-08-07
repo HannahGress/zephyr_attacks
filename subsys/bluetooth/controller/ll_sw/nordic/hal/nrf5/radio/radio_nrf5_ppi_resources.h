@@ -196,14 +196,3 @@
 #define SW_SWITCH_TIMER_TASK_GROUP_BASE       0
 #define SW_SWITCH_SINGLE_TIMER_TASK_GROUP_IDX 2
 #endif /* !CONFIG_BT_CTLR_TIFS_HW */
-
-/*
- * For benchmarking the nRF53840
- */
-
-/*
- * channel to capture start & end of encryption or decryption
- */
-#define HAL_CRYPT_START_TIME_ENCRYPT_PPI 0
-#define HAL_CRYPT_START_TIME_DECRYPT_PPI 1
-#define HAL_CRYPT_END_TIME_ENDCRYPT_PPI 2
