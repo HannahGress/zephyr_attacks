@@ -43,6 +43,15 @@
 
 #include "hal/debug.h"
 
+// include the nRF52_54_ppi_dppi or shared_variables header
+#if defined(CONFIG_SOC_COMPATIBLE_NRF54LX) || defined(CONFIG_SOC_COMPATIBLE_NRF52X)
+#include <nRF52_54_ppi_dppi.h>
+#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+//#include <nRF5340_dppi.h>
+//#include <shared_variables.h>
+#endif
+
+static bool benchmarked_tx_packet = false;
 static int init_reset(void);
 static void isr_done(void *param);
 static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
@@ -508,6 +517,18 @@ void lll_conn_isr_rx(void *param)
 	pdu_data_tx->sn = lll->sn;
 	pdu_data_tx->nesn = lll->nesn;
 
+	/* PART 1 OF CAPTURING THE ENCRYPTION VALUES INTO THE VARIABLES
+	* We check that we have the correct packet (pdu_data_tx->ll_id == PDU_DATA_LLID_DATA_START)
+	* and set the boolean flag accordingly
+	*/
+	if (lll->enc_tx &&
+	pdu_data_tx->len == payload_size_i + 7 &&
+	pdu_data_tx->ll_id == PDU_DATA_LLID_DATA_START) {
+		benchmarked_tx_packet = true;
+	} else {
+		benchmarked_tx_packet = false;
+	}
+
 	/* setup the radio tx packet buffer */
 	lll_conn_tx_pkt_set(lll, pdu_data_tx);
 
@@ -662,6 +683,73 @@ void lll_conn_isr_tx(void *param)
 
 	/* Clear radio tx status and events */
 	lll_isr_tx_status_reset();
+
+	/* PART 2 OF CAPTURING THE ENCRYPTION VALUES INTO THE VARIABLES
+	* We check whether we have our packet (benchmarked_tx_packet) and if yes.
+	* we assign the timer values to the variables
+	*/
+
+	if (benchmarked_tx_packet) {
+		#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
+		/*
+		 * readout the KSGEN times
+		 * we decide in the notification callback function which start value we need depending on the packet size
+		 * Therefore, we store both, t_start_KSGEN_NODLE and t_start_KSGEN_DLE timer values
+		 */
+
+		/* t_start_KSGEN is measured and assigned elsewhere */
+		encryption_measurement.t_end_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_END_CC_OFFSET];
+		encryption_measurement.delta_KSGEN = encryption_measurement.t_end_KSGEN - encryption_measurement.t_start_KSGEN;
+
+		/* readout end times of encryption */
+		encryption_measurement.t_start_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_START_ENC_CC_OFFSET];
+		encryption_measurement.t_end_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
+
+		/* calculate the encr time */
+		encryption_measurement.delta_ENDCRYPT = encryption_measurement.t_end_ENDCRYPT - encryption_measurement.t_start_ENDCRYPT;
+
+		if (encryption_measurement_count < SUM_ARRAY_MAX_SIZE) {
+			encryption_measurements[encryption_measurement_count] = encryption_measurement;
+			encryption_measurement_count++;
+		}
+
+		#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+		// readout end times of encryption
+		/*
+		BENCHMARK_SHARED_VARIABLES->t_start_ENCRYPT = NRF_TIMER1->CC[ENCRYPT_START_DPPI_CHANNEL];
+		BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT = NRF_TIMER1->CC[ENDCRYPT_END_DPPI_CHANNEL];
+
+		// calculate the encr time
+		BENCHMARK_SHARED_VARIABLES->delta_ENCRYPT = BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT - BENCHMARK_SHARED_VARIABLES->t_start_ENCRYPT;
+
+		if (BENCHMARK_SHARED_VARIABLES->is_benchmarking && BENCHMARK_SHARED_VARIABLES->enc_count < SUM_ARRAY_MAX_SIZE) {
+			// we want to store the results in our arrays
+			BENCHMARK_SHARED_VARIABLES->values_ENCRYPT[BENCHMARK_SHARED_VARIABLES->enc_count] = BENCHMARK_SHARED_VARIABLES->delta_ENCRYPT;
+			BENCHMARK_SHARED_VARIABLES->enc_count++;
+		}
+		__DMB();
+		*/
+
+		#elif defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
+		/* readout end times of encryption */
+
+		encryption_measurement.t_start_ENDCRYPT = nrf_timer_cc_get(NRF_TIMER00, NRF_TIMER_CC_CHANNEL0);
+		encryption_measurement.t_end_ENDCRYPT = nrf_timer_cc_get(NRF_TIMER00, NRF_TIMER_CC_CHANNEL2);
+
+
+		/* calculate the encr time */
+		encryption_measurement.delta_ENDCRYPT = encryption_measurement.t_end_ENDCRYPT - encryption_measurement.t_start_ENDCRYPT;
+
+		if (encryption_measurement_count < SUM_ARRAY_MAX_SIZE) {
+			encryption_measurements[encryption_measurement_count] = encryption_measurement;
+			encryption_measurement_count++;
+		}
+
+		k_sem_give(&encryption_measurement_sem);
+		#endif
+
+		benchmarked_tx_packet = false;
+	}
 
 	tx_cnt++;
 
@@ -1242,6 +1330,68 @@ static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 					mic_state = LLL_CONN_MIC_FAIL;
 
 					return -EINVAL;
+				}
+
+				/* WE ASSIGN HERE OUR TIME CAPTURE VALUES FOR DECRYPTION
+				 * We must ensure that we only capture non-empty and Data PDUs, that's why we've filtered for
+				 * if (pdu_data_rx->len != 0) {...}
+				 * and now for pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_START
+				 * We do not filter additionally for pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_CONTINUE, because we
+				 * limit the payload to 244, so the notification payload doesn't need to be split into multiple
+				 * L2CAP packages which would require PDU_DATA_LLID_DATA_CONTINUE
+				 */
+
+				//if (pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_START) {
+				if (pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_START &&
+					pdu_data_rx->len >= 5 &&
+					pdu_data_rx->lldata[2] == 0x04 &&
+					pdu_data_rx->lldata[3] == 0x00 &&
+					pdu_data_rx->lldata[4] == 0x1B) {
+					#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
+					/*
+					 * readout the KSGEN times
+					 * we decide in the notification callback function which start value we need depending on the packet size
+					 * Therefore, we store both, t_start_KSGEN_NODLE and t_start_KSGEN_DLE timer values
+					 */
+
+					/* t_start_KSGEN is measured and assigned elsewhere */
+					decryption_measurement.t_end_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_END_CC_OFFSET];
+					decryption_measurement.delta_KSGEN = decryption_measurement.t_end_KSGEN - decryption_measurement.t_start_KSGEN;
+
+					/* readout end times of decryption */
+					decryption_measurement.t_start_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_START_DECR_CC_OFFSET];
+					decryption_measurement.t_end_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
+
+					/* calculate the decr time */
+					decryption_measurement.delta_ENDCRYPT = decryption_measurement.t_end_ENDCRYPT - decryption_measurement.t_start_ENDCRYPT;
+
+					if (decryption_measurement_count < SUM_ARRAY_MAX_SIZE) {
+						decryption_measurements[decryption_measurement_count] = decryption_measurement;
+						decryption_measurement_count++;
+					}
+
+					#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+					/* readout end times of decryption */
+					/*
+					BENCHMARK_SHARED_VARIABLES->t_start_DECRYPT = NRF_TIMER1->CC[DECRYPT_START_DPPI_CHANNEL];
+					BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT = NRF_TIMER1->CC[ENDCRYPT_END_DPPI_CHANNEL];
+
+					__DMB();
+					*/
+
+					#elif defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
+					/* readout end times of decryption */
+					decryption_measurement.t_start_ENDCRYPT = nrf_timer_cc_get(NRF_TIMER00, NRF_TIMER_CC_CHANNEL1);
+					decryption_measurement.t_end_ENDCRYPT = NRF_TIMER00->CC[ENDCRYPT_DPPI_CHANNEL];
+
+					/* calculate the decr time */
+					decryption_measurement.delta_ENDCRYPT = decryption_measurement.t_end_ENDCRYPT - decryption_measurement.t_start_ENDCRYPT;
+
+					if (decryption_measurement_count < SUM_ARRAY_MAX_SIZE) {
+						decryption_measurements[decryption_measurement_count] = decryption_measurement;
+						decryption_measurement_count++;
+					}
+					#endif
 				}
 
 				/* Increment counter */

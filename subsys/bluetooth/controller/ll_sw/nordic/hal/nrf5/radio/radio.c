@@ -19,6 +19,7 @@
 #include "hal/ccm.h"
 #include "hal/cntr.h"
 #include "hal/radio.h"
+
 #include "hal/radio_df.h"
 #include "hal/ticker.h"
 
@@ -28,12 +29,8 @@
 
 #include "radio_internal.h"
 
-// include the nRF52_54_ppi_dppi or shared_variables header
-#if defined(CONFIG_SOC_COMPATIBLE_NRF54LX) || defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUAPP) || defined(CONFIG_SOC_COMPATIBLE_NRF52X)
-#include "../../../../app_attacks/include/nRF52_54_ppi_dppi.h"
-#elif
-defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
-#include "../../../../app_attacks/common_nRF5340/shared_varibles.h"
+#if defined(CONFIG_SOC_COMPATIBLE_NRF52X) || defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
+#include <nRF52_54_ppi_dppi.h>
 #endif
 
 /* Converts the GPIO controller in a FEM property's GPIO specification
@@ -631,26 +628,8 @@ static void last_pdu_end_us_init(uint32_t latency_us)
 	last_pdu_end_us = 0U;
 }
 
-
 uint32_t radio_is_done(void)
 {
-	#if defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
-	t_start_ENCRYPT = NRF_TIMER10->CC[ENCRYPT_START_DPPI_CHANNEL];
-	t_start_DECRYPT = NRF_TIMER10->CC[DECRYPT_START_DPPI_CHANNEL];
-	t_end_ENDCRYPT = NRF_TIMER10->CC[ENDCRYPT_END_DPPI_CHANNEL];
-
-	// calculate the encr/decr time
-	delta_ENCRYPT = t_end_ENDCRYPT - t_start_ENCRYPT;
-	delta_DECRYPT = t_end_ENDCRYPT - t_start_ENCRYPT;
-
-	if (is_benchmarking && enc_count < SUM_ARRAY_MAX_SIZE) {
-		// we want to store the results in our arrays
-		values_ENCRYPT[enc_count] = delta_ENCRYPT;
-		values_DECRYPT[enc_count] = delta_DECRYPT;
-		enc_count++;
-	}
-	#endif
-
 	if (NRF_RADIO->HAL_RADIO_TRX_EVENTS_END != 0) {
 		/* On packet END event increment last packet end time value.
 		 * Note: this depends on the function being called exactly once
@@ -665,48 +644,8 @@ uint32_t radio_is_done(void)
 
 #else /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
 
-
 uint32_t radio_is_done(void)
 {
-	#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
-	// readout end times of encryption / decryption
-
-	t_start_ENCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_ENCRYPT_CC_OFFSET];
-	t_start_DECRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_DECRYPT_CC_OFFSET];
-	t_end_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
-
-	// calculate the encr/decr time
-	delta_ENCRYPT = t_end_ENDCRYPT - t_start_ENCRYPT;
-	delta_DECRYPT = t_end_ENDCRYPT - t_start_ENCRYPT;
-
-	if (is_benchmarking && enc_count < SUM_ARRAY_MAX_SIZE) {
-		// we want to store the results in our arrays
-		values_ENCRYPT[enc_count] = delta_ENCRYPT;
-		values_DECRYPT[enc_count] = delta_DECRYPT;
-		enc_count++;
-	}
-
-	#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
-	// readout end times of encryption / decryption
-
-	BENCHMARK_SHARED_VARIABLES->t_start_ENCRYPT = NRF_TIMER1->CC[ENCRYPT_START_DPPI_CHANNEL];
-	BENCHMARK_SHARED_VARIABLES->t_start_DECRYPT = NRF_TIMER1->CC[DECRYPT_START_DPPI_CHANNEL];
-	BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT = NRF_TIMER1->CC[ENDCRYPT_END_DPPI_CHANNEL];
-
-	// calculate the encr/decr time
-	BENCHMARK_SHARED_VARIABLES->delta_ENCRYPT = BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT - BENCHMARK_SHARED_VARIABLES->t_start_ENCRYPT;
-	BENCHMARK_SHARED_VARIABLES->delta_DECRYPT = BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT - BENCHMARK_SHARED_VARIABLES->t_start_ENCRYPT;
-
-	if (BENCHMARK_SHARED_VARIABLES->is_benchmarking && BENCHMARK_SHARED_VARIABLES->enc_count < BENCHMARK_SHARED_VARIABLES->SUM_ARRAY_MAX_SIZE) {
-		// we want to store the results in our arrays
-		BENCHMARK_SHARED_VARIABLES->values_ENCRYPT[BENCHMARK_SHARED_VARIABLES->enc_count] = BENCHMARK_SHARED_VARIABLES->delta_ENCRYPT;
-		BENCHMARK_SHARED_VARIABLES->values_DECRYPT[BENCHMARK_SHARED_VARIABLES->enc_count] = BENCHMARK_SHARED_VARIABLES->delta_DECRYPT;
-		BENCHMARK_SHARED_VARIABLES->enc_count++;
-	}
-	__DMB();
-
-	#endif
-
 	return (NRF_RADIO->HAL_RADIO_TRX_EVENTS_END != 0);
 }
 #endif /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
@@ -2401,6 +2340,10 @@ static void *radio_ccm_ext_rx_pkt_set(struct ccm *cnf, uint8_t phy, uint8_t pdu_
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_END);
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_ERROR);
 
+	/* DECR: start KSGEN, when payload 21 - 244 Bytes / DLE && device is the Peripheral OR Central */
+	NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_KSGEN_START_DECR_CC_OFFSET] = 1;
+	decryption_measurement.t_start_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_START_DECR_CC_OFFSET];
+
 	nrf_ccm_task_trigger(NRF_CCM, NRF_CCM_TASK_KSGEN);
 #endif /* !CONFIG_SOC_COMPATIBLE_NRF54LX */
 
@@ -2574,6 +2517,9 @@ static void *radio_ccm_ext_tx_pkt_set(struct ccm *cnf, uint8_t pdu_type, void *p
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_END);
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_ERROR);
 
+	/* Start measuring the encryption start of the nRF54L15 */
+	nrf_timer_task_trigger(NRF_TIMER00, NRF_TIMER_TASK_CAPTURE0);
+
 	nrf_ccm_task_trigger(NRF_CCM, NRF_CCM_TASK_START);
 
 #else /* !CONFIG_SOC_COMPATIBLE_NRF54LX */
@@ -2586,6 +2532,10 @@ static void *radio_ccm_ext_tx_pkt_set(struct ccm *cnf, uint8_t pdu_type, void *p
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_ENDKSGEN);
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_END);
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_ERROR);
+
+	/* ENCR: start KSGEN when device is the Peripheral */
+	NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_KSGEN_START_ENC_CC_OFFSET] = 1;
+	encryption_measurement.t_start_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_START_ENC_CC_OFFSET];
 
 	nrf_ccm_task_trigger(NRF_CCM, NRF_CCM_TASK_KSGEN);
 #endif /* !CONFIG_SOC_COMPATIBLE_NRF54LX */

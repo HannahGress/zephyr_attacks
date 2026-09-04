@@ -5,7 +5,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 #if defined(CONFIG_BT_CTLR_PHY_CODED)
 /* The 2 adjacent TIMER EVENTS_COMPARE event offsets used for implementing
  * SW_SWITCH_TIMER-based auto-switch for TIFS, when receiving in LE Coded PHY.
@@ -23,6 +22,7 @@
 static inline void hal_radio_sw_switch_coded_config_clear(uint8_t ppi_en,
 	uint8_t ppi_dis, uint8_t cc_s2, uint8_t group_index);
 #endif
+#include <hal/nrf_ppi.h>
 
 static inline void hal_radio_nrf_ppi_channels_enable(uint32_t mask)
 {
