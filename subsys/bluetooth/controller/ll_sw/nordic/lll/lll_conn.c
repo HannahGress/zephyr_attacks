@@ -745,8 +745,9 @@ void lll_conn_isr_tx(void *param)
 			encryption_measurement_count++;
 		}
 
-		k_sem_give(&encryption_measurement_sem);
 		#endif
+
+		k_sem_give(&encryption_measurement_sem);
 
 		benchmarked_tx_packet = false;
 	}
@@ -1332,21 +1333,17 @@ static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 					return -EINVAL;
 				}
 
-				/* WE ASSIGN HERE OUR TIME CAPTURE VALUES FOR DECRYPTION
-				 * We must ensure that we only capture non-empty and Data PDUs, that's why we've filtered for
-				 * if (pdu_data_rx->len != 0) {...}
-				 * and now for pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_START
-				 * We do not filter additionally for pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_CONTINUE, because we
-				 * limit the payload to 244, so the notification payload doesn't need to be split into multiple
-				 * L2CAP packages which would require PDU_DATA_LLID_DATA_CONTINUE
-				 */
+				/* WE ASSIGN HERE OUR TIME CAPTURE VALUES FOR DECRYPTION */
 
-				//if (pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_START) {
-				if (pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_START &&
-					pdu_data_rx->len >= 5 &&
-					pdu_data_rx->lldata[2] == 0x04 &&
+				if (pdu_data_rx->ll_id == PDU_DATA_LLID_DATA_START && /* We only wanna capture Data PDUs; Since we limit the payload to 244 Bytes, we are not interested in PDU_DATA_LLID_DATA_CONTINUE */
+					pdu_data_rx->len >= 5 && /* Since we check for pdu_data_rx->lldata[4], we must ensure that our packet is that long to avoid null pointer exceptions */
+					/* We check for L2CAP Channel Identifiere (CID) (byte 3 and 4 / index 2 and 3; the header data is byte 1 and 2 / index 0 and 1)*/
+					pdu_data_rx->lldata[2] == 0x04 && /* ATT Protocol is 0x0004, in little endian 0x04 and 0x00 */
 					pdu_data_rx->lldata[3] == 0x00 &&
-					pdu_data_rx->lldata[4] == 0x1B) {
+					/* The rest of the L2CAP package (starting with pdu_data_rx->lldata[4]) is payload for it;
+					 * therefore, we must look at the upper protocol that is relevant for us, the ATT protocol
+					 * Source: Vol 1, part A, Sec. 3.6; Vol. 3, Part A, Table 2.3; Vol. 3, Part A, 3 */
+					pdu_data_rx->lldata[4] == 0x1B) { /* Since we want to filter for ATT Handle Value Notification, we look for the ATT opcode 0x1B (Vol. 3, Part F, Sec. 3.4.7.1) */
 					#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
 					/*
 					 * readout the KSGEN times
