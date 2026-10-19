@@ -47,8 +47,8 @@
 #if defined(CONFIG_SOC_COMPATIBLE_NRF54LX) || defined(CONFIG_SOC_COMPATIBLE_NRF52X)
 #include <nRF52_54_ppi_dppi.h>
 #elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
-//#include <nRF5340_dppi.h>
-//#include <shared_variables.h>
+#include "../../app_attacks/cpunet/include/nRF5340_dppi.h"
+#include <shared_variables.h>
 #endif
 
 static bool benchmarked_tx_packet = false;
@@ -522,7 +522,11 @@ void lll_conn_isr_rx(void *param)
 	* and set the boolean flag accordingly
 	*/
 	if (lll->enc_tx &&
+	#if defined(CONFIG_SOC_COMPATIBLE_NRF52X) || defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
 	pdu_data_tx->len == payload_size_i + 7 &&
+	#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+	pdu_data_tx->len == NRF5340_SHARED_VARIABLES->benchmark_control.payload_size + 7 &&
+	#endif
 	pdu_data_tx->ll_id == PDU_DATA_LLID_DATA_START) {
 		benchmarked_tx_packet = true;
 	} else {
@@ -691,11 +695,7 @@ void lll_conn_isr_tx(void *param)
 
 	if (benchmarked_tx_packet) {
 		#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
-		/*
-		 * readout the KSGEN times
-		 * we decide in the notification callback function which start value we need depending on the packet size
-		 * Therefore, we store both, t_start_KSGEN_NODLE and t_start_KSGEN_DLE timer values
-		 */
+		/* readout the KSGEN times */
 
 		/* t_start_KSGEN is measured and assigned elsewhere */
 		encryption_measurement.t_end_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_END_CC_OFFSET];
@@ -714,21 +714,26 @@ void lll_conn_isr_tx(void *param)
 		}
 
 		#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+
+		/* t_start_KSGEN is measured and assigned elsewhere */
+		NRF5340_SHARED_VARIABLES->encryption_measurement.t_end_KSGEN = NRF_TIMER2->CC[HAL_EVENT_TIMER_KSGEN_END_CC_OFFSET];
+		NRF5340_SHARED_VARIABLES->encryption_measurement.delta_KSGEN = NRF5340_SHARED_VARIABLES->encryption_measurement.t_end_KSGEN - NRF5340_SHARED_VARIABLES->encryption_measurement.t_start_KSGEN;
+
 		// readout end times of encryption
-		/*
-		BENCHMARK_SHARED_VARIABLES->t_start_ENCRYPT = NRF_TIMER1->CC[ENCRYPT_START_DPPI_CHANNEL];
-		BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT = NRF_TIMER1->CC[ENDCRYPT_END_DPPI_CHANNEL];
+
+		NRF5340_SHARED_VARIABLES->encryption_measurement.t_start_ENDCRYPT = NRF_TIMER2->CC[HAL_EVENT_TIMER_CCM_START_ENC_CC_OFFSET];
+		NRF5340_SHARED_VARIABLES->encryption_measurement.t_end_ENDCRYPT = NRF_TIMER2->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
 
 		// calculate the encr time
-		BENCHMARK_SHARED_VARIABLES->delta_ENCRYPT = BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT - BENCHMARK_SHARED_VARIABLES->t_start_ENCRYPT;
+		NRF5340_SHARED_VARIABLES->encryption_measurement.delta_ENDCRYPT = NRF5340_SHARED_VARIABLES->encryption_measurement.t_end_ENDCRYPT - NRF5340_SHARED_VARIABLES->encryption_measurement.t_start_ENDCRYPT;
 
-		if (BENCHMARK_SHARED_VARIABLES->is_benchmarking && BENCHMARK_SHARED_VARIABLES->enc_count < SUM_ARRAY_MAX_SIZE) {
-			// we want to store the results in our arrays
-			BENCHMARK_SHARED_VARIABLES->values_ENCRYPT[BENCHMARK_SHARED_VARIABLES->enc_count] = BENCHMARK_SHARED_VARIABLES->delta_ENCRYPT;
-			BENCHMARK_SHARED_VARIABLES->enc_count++;
+		if (NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurement_count < SUM_ARRAY_MAX_SIZE) {
+			NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurements[NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurement_count] = NRF5340_SHARED_VARIABLES->encryption_measurement;
 		}
 		__DMB();
-		*/
+
+		NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurement_count++;
+
 
 		#elif defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
 		/* readout end times of encryption */
@@ -747,7 +752,9 @@ void lll_conn_isr_tx(void *param)
 
 		#endif
 
+		#if defined(CONFIG_SOC_COMPATIBLE_NRF52X) || defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
 		k_sem_give(&encryption_measurement_sem);
+		#endif
 
 		benchmarked_tx_packet = false;
 	}
@@ -1345,18 +1352,15 @@ static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 					 * Source: Vol 1, part A, Sec. 3.6; Vol. 3, Part A, Table 2.3; Vol. 3, Part A, 3 */
 					pdu_data_rx->lldata[4] == 0x1B) { /* Since we want to filter for ATT Handle Value Notification, we look for the ATT opcode 0x1B (Vol. 3, Part F, Sec. 3.4.7.1) */
 					#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
-					/*
-					 * readout the KSGEN times
-					 * we decide in the notification callback function which start value we need depending on the packet size
-					 * Therefore, we store both, t_start_KSGEN_NODLE and t_start_KSGEN_DLE timer values
-					 */
+					/* readout the KSGEN times*/
 
 					/* t_start_KSGEN is measured and assigned elsewhere */
 					decryption_measurement.t_end_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_END_CC_OFFSET];
+					/* Calculate KSGEN time*/
 					decryption_measurement.delta_KSGEN = decryption_measurement.t_end_KSGEN - decryption_measurement.t_start_KSGEN;
 
-					/* readout end times of decryption */
-					decryption_measurement.t_start_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_START_DECR_CC_OFFSET];
+					/* readout start and end times of decryption */
+					decryption_measurement.t_start_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_DECR_CC_OFFSET];
 					decryption_measurement.t_end_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
 
 					/* calculate the decr time */
@@ -1368,18 +1372,32 @@ static inline int isr_rx_pdu(struct lll_conn *lll, struct pdu_data *pdu_data_rx,
 					}
 
 					#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+
+					/* readout the KSGEN times*/
+
+					/* t_start_KSGEN is measured and assigned elsewhere */
+					NRF5340_SHARED_VARIABLES->decryption_measurement.t_end_KSGEN = NRF_TIMER2->CC[HAL_EVENT_TIMER_KSGEN_END_CC_OFFSET];
+					NRF5340_SHARED_VARIABLES->decryption_measurement.delta_KSGEN = NRF5340_SHARED_VARIABLES->decryption_measurement.t_end_KSGEN - NRF5340_SHARED_VARIABLES->decryption_measurement.t_start_KSGEN;
+
+
 					/* readout end times of decryption */
-					/*
-					BENCHMARK_SHARED_VARIABLES->t_start_DECRYPT = NRF_TIMER1->CC[DECRYPT_START_DPPI_CHANNEL];
-					BENCHMARK_SHARED_VARIABLES->t_end_ENDCRYPT = NRF_TIMER1->CC[ENDCRYPT_END_DPPI_CHANNEL];
+					NRF5340_SHARED_VARIABLES->decryption_measurement.t_start_ENDCRYPT = NRF_TIMER2->CC[HAL_EVENT_TIMER_CCM_START_DECR_CC_OFFSET];
+					NRF5340_SHARED_VARIABLES->decryption_measurement.t_end_ENDCRYPT = NRF_TIMER2->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
+
+					/* calculate the decr time */
+					NRF5340_SHARED_VARIABLES->decryption_measurement.delta_ENDCRYPT = NRF5340_SHARED_VARIABLES->decryption_measurement.t_end_ENDCRYPT - NRF5340_SHARED_VARIABLES->decryption_measurement.t_start_ENDCRYPT;
+
+					if (NRF5340_SHARED_VARIABLES->benchmark_results.decryption_measurement_count < SUM_ARRAY_MAX_SIZE) {
+						NRF5340_SHARED_VARIABLES->benchmark_results.decryption_measurements[NRF5340_SHARED_VARIABLES->benchmark_results.decryption_measurement_count] = NRF5340_SHARED_VARIABLES->decryption_measurement;
+						NRF5340_SHARED_VARIABLES->benchmark_results.decryption_measurement_count++;
+					}
 
 					__DMB();
-					*/
 
 					#elif defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
 					/* readout end times of decryption */
 					decryption_measurement.t_start_ENDCRYPT = nrf_timer_cc_get(NRF_TIMER00, NRF_TIMER_CC_CHANNEL1);
-					decryption_measurement.t_end_ENDCRYPT = NRF_TIMER00->CC[ENDCRYPT_DPPI_CHANNEL];
+					decryption_measurement.t_end_ENDCRYPT = nrf_timer_cc_get(NRF_TIMER00, NRF_TIMER_CC_CHANNEL2);
 
 					/* calculate the decr time */
 					decryption_measurement.delta_ENDCRYPT = decryption_measurement.t_end_ENDCRYPT - decryption_measurement.t_start_ENDCRYPT;

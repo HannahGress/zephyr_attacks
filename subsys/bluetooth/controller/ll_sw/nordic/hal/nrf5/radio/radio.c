@@ -31,6 +31,9 @@
 
 #if defined(CONFIG_SOC_COMPATIBLE_NRF52X) || defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
 #include <nRF52_54_ppi_dppi.h>
+#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+#include "../../app_attacks/cpunet/include/nRF5340_dppi.h"
+#include <shared_variables.h>
 #endif
 
 /* Converts the GPIO controller in a FEM property's GPIO specification
@@ -2340,9 +2343,14 @@ static void *radio_ccm_ext_rx_pkt_set(struct ccm *cnf, uint8_t phy, uint8_t pdu_
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_END);
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_ERROR);
 
-	/* DECR: start KSGEN, when payload 21 - 244 Bytes / DLE && device is the Peripheral OR Central */
+	/* DECR: start KSGEN */
+	#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
 	NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_KSGEN_START_DECR_CC_OFFSET] = 1;
 	decryption_measurement.t_start_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_START_DECR_CC_OFFSET];
+	#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+	NRF_TIMER2->TASKS_CAPTURE[HAL_EVENT_TIMER_KSGEN_START_DECR_CC_OFFSET] = 1;
+	NRF5340_SHARED_VARIABLES->decryption_measurement.t_start_KSGEN = NRF_TIMER2->CC[HAL_EVENT_TIMER_KSGEN_START_DECR_CC_OFFSET];
+	#endif
 
 	nrf_ccm_task_trigger(NRF_CCM, NRF_CCM_TASK_KSGEN);
 #endif /* !CONFIG_SOC_COMPATIBLE_NRF54LX */
@@ -2517,7 +2525,10 @@ static void *radio_ccm_ext_tx_pkt_set(struct ccm *cnf, uint8_t pdu_type, void *p
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_END);
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_ERROR);
 
-	/* Start measuring the encryption start of the nRF54L15 */
+	/*
+	 * Start measuring the encryption start of the nRF54L15
+	 * We don't need to include an #if defined(...), because we're already in this kind of block
+	 */
 	nrf_timer_task_trigger(NRF_TIMER00, NRF_TIMER_TASK_CAPTURE0);
 
 	nrf_ccm_task_trigger(NRF_CCM, NRF_CCM_TASK_START);
@@ -2533,9 +2544,14 @@ static void *radio_ccm_ext_tx_pkt_set(struct ccm *cnf, uint8_t pdu_type, void *p
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_END);
 	nrf_ccm_event_clear(NRF_CCM, NRF_CCM_EVENT_ERROR);
 
-	/* ENCR: start KSGEN when device is the Peripheral */
+	#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
+	/* ENCR: start KSGEN */
 	NRF_TIMER3->TASKS_CAPTURE[HAL_EVENT_TIMER_KSGEN_START_ENC_CC_OFFSET] = 1;
 	encryption_measurement.t_start_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_START_ENC_CC_OFFSET];
+	#elif defined(CONFIG_SOC_COMPATIBLE_NRF5340_CPUNET)
+	NRF_TIMER2->TASKS_CAPTURE[HAL_EVENT_TIMER_KSGEN_START_ENC_CC_OFFSET] = 1;
+	NRF5340_SHARED_VARIABLES->encryption_measurement.t_start_KSGEN = NRF_TIMER2->CC[HAL_EVENT_TIMER_KSGEN_START_ENC_CC_OFFSET];
+	#endif
 
 	nrf_ccm_task_trigger(NRF_CCM, NRF_CCM_TASK_KSGEN);
 #endif /* !CONFIG_SOC_COMPATIBLE_NRF54LX */
