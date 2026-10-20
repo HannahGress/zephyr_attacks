@@ -51,6 +51,11 @@
 #include <shared_variables.h>
 #endif
 
+// 
+#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
+#include <hal/nrf_ppi.h>
+#endif
+
 static bool benchmarked_tx_packet = false;
 static int init_reset(void);
 static void isr_done(void *param);
@@ -529,6 +534,12 @@ void lll_conn_isr_rx(void *param)
 	#endif
 	pdu_data_tx->ll_id == PDU_DATA_LLID_DATA_START) {
 		benchmarked_tx_packet = true;
+#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
+	    // activate P0.04 for this TX encryption only; pin only dips with upcoming send_data encryption
+	    // gets deactivated in isr_tx
+		nrf_ppi_channels_enable(NRF_PPI,
+			BIT(PACKET_MARKER_ENC_START_PPI) | BIT(PACKET_MARKER_ENC_END_PPI));
+#endif
 	} else {
 		benchmarked_tx_packet = false;
 	}
@@ -701,8 +712,12 @@ void lll_conn_isr_tx(void *param)
 		encryption_measurement.t_end_KSGEN = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_END_CC_OFFSET];
 		encryption_measurement.delta_KSGEN = encryption_measurement.t_end_KSGEN - encryption_measurement.t_start_KSGEN;
 
-		/* readout end times of encryption */
-		encryption_measurement.t_start_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_KSGEN_START_ENC_CC_OFFSET];
+		/* readout start and end times of encryption (nRF52 only)
+		 * start is EVENTS_ENDKSGEN (CRYPT is started by the ENDKSGEN_CRYPT short),
+		 * so KSGEN is not included in delta_ENDCRYPT and is measured separately.
+		 * The nRF54L CCM has no separate KSGEN step, see the NRF54LX branch below.
+		 */
+		encryption_measurement.t_start_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_START_ENC_CC_OFFSET];
 		encryption_measurement.t_end_ENDCRYPT = NRF_TIMER3->CC[HAL_EVENT_TIMER_CCM_END_ENDCRYPT_CC_OFFSET];
 
 		/* calculate the encr time */
@@ -736,8 +751,10 @@ void lll_conn_isr_tx(void *param)
 
 
 		#elif defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
-		/* readout end times of encryption */
-
+		// readout start and end times of encryption
+		 // The nRF54L CCM has no separate KSGEN step that we could tell apart, so
+		 // start = CC0, captured in radio.c right before TASK_START, and
+		 // delta_ENDCRYPT is the whole CCM job (no delta_KSGEN on this SoC).
 		encryption_measurement.t_start_ENDCRYPT = nrf_timer_cc_get(NRF_TIMER00, NRF_TIMER_CC_CHANNEL0);
 		encryption_measurement.t_end_ENDCRYPT = nrf_timer_cc_get(NRF_TIMER00, NRF_TIMER_CC_CHANNEL2);
 
@@ -758,6 +775,12 @@ void lll_conn_isr_tx(void *param)
 
 		benchmarked_tx_packet = false;
 	}
+
+#if defined(CONFIG_SOC_COMPATIBLE_NRF52X)
+    // deactivate P0.04 after every TX so it can't dip on enc/dec of keep alive packets
+	nrf_ppi_channels_disable(NRF_PPI,
+		BIT(PACKET_MARKER_ENC_START_PPI) | BIT(PACKET_MARKER_ENC_END_PPI));
+#endif
 
 	tx_cnt++;
 
