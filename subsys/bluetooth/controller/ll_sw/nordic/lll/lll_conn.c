@@ -744,11 +744,9 @@ void lll_conn_isr_tx(void *param)
 
 		if (NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurement_count < SUM_ARRAY_MAX_SIZE) {
 			NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurements[NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurement_count] = NRF5340_SHARED_VARIABLES->encryption_measurement;
+			NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurement_count++;
+			__DMB();
 		}
-		__DMB();
-
-		NRF5340_SHARED_VARIABLES->benchmark_results.encryption_measurement_count++;
-
 
 		#elif defined(CONFIG_SOC_COMPATIBLE_NRF54LX)
 		// readout start and end times of encryption
